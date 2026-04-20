@@ -1,22 +1,20 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import asc, func
 from datetime import datetime
 from typing import List, Optional
-import uvicorn
+from pydantic import BaseModel
 
-app = FastAPI(title = 'SBS', description = 'Task tracker with progress bar')
+from app.config import settings
+from app.database import get_db, engine, Base
+from app.models import Task
 
-# Хранилище задач / Storage of the tasks
-tasks_db = []
-task_counter = 1
-
-# Модель для создания задачи (Pydantic) / Model for create task
+# ========== PYDANTIC СХЕМЫ ==========
 class TaskCreate(BaseModel):
     title: str
     content: Optional[str] = None
     deadline: Optional[datetime] = None
 
-# Модель для ответа (что возвращаем клиенту) / Model for answer (what returns to client)
 class TaskResponse(BaseModel):
     id: int
     title: str
@@ -24,78 +22,91 @@ class TaskResponse(BaseModel):
     deadline: Optional[datetime]
     is_done: bool
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
 
+# ========== СОЗДАНИЕ ПРИЛОЖЕНИЯ ==========
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="Task tracker with progress bar",
+    debug=settings.DEBUG
+)
 
-# ЭНДПОИНТЫ (РУЧКИ) / ENDPOINTS (ROOTS)
+# # Создание таблиц при старте
+# @app.on_event("startup")
+# def startup():
+#     Base.metadata.create_all(bind=engine)
 
-@app.post('/tasks', response_model = TaskResponse)
-async def create_task(task: TaskCreate):
-    global task_counter
+# ========== ЭНДПОИНТЫ ==========
 
-    new_task = {
-        'id': task_counter,
-        'title': task.title,
-        'content': task.content,
-        'deadline': task.deadline,
-        'is_done': False,
-        'created_at': datetime.now()
-    }
-
-    tasks_db.append(new_task)
-    task_counter += 1
+@app.post("/tasks", response_model=TaskResponse)
+def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+    new_task = Task(
+        title=task.title,
+        content=task.content,
+        deadline=task.deadline,
+        is_done=False
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
     return new_task
 
-# Получить все задачи / Get all tasks 
-@app.get('/tasks', response_model = List[TaskResponse])
-async def get_all_tasks():
-    return tasks_db
+@app.get("/tasks", response_model=List[TaskResponse])
+def get_all_tasks(db: Session = Depends(get_db)):
+    tasks = db.query(Task).order_by(Task.created_at.desc()).all()
+    return tasks
 
-# Получить одну задачу по ID / Get one task by ID
-@app.get('/tasks/{task_id}', response_model = TaskResponse)
-async def get_task(task_id: int):
-    for task in tasks_db:
-        if task['id'] == task_id:
-            return task
-    raise HTTPException(status_code = 404, detail = 'Task not found. Please check the correctness of the ID.')
+@app.get("/tasks/{task_id}", response_model=TaskResponse)
+def get_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
-# Обновить задачу / Update task
-@app.put('/tasks/{task_id}', response_model = TaskResponse)
-async def update_task(task_id: int, task_update: TaskCreate):
-    for task in tasks_db:
-        if task['id'] == task_id:
-            task['title'] = task_update.title
-            task['content'] = task_update.content
-            task['deadline'] = task_update.deadline
-            return task
-    raise HTTPException(status_code = 404, detail = 'Task not found. Please check the correctness of the ID.')
+@app.put("/tasks/{task_id}", response_model=TaskResponse)
+def update_task(task_id: int, task_update: TaskCreate, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
     
-# Отметить задачу выполненной / Mark the task as completed
-@app.patch('/tasks/{task_id}/done')
-async def mark_done(task_id: int):
-    for task in tasks_db:
-        if task['id'] == task_id:
-            task['is_done'] = True
-            return {'message': f'Task {task_id} marked as done.'}
-    raise HTTPException(status_code = 404, detail = 'Task not found. Please check the correctness of the ID.')
+    task.title = task_update.title
+    task.content = task_update.content
+    task.deadline = task_update.deadline
     
-# Удалить задачу / Delete task
-@app.delete('/tasks/{task_id}', response_model = TaskResponse)
-async def delete_task(task_id: int):
-    global tasks_db
-    for task_number, task in enumerate(tasks_db):
-        if task['id'] == task_id:
-            tasks_db.pop(task_number)
-            return {'message': f'Task {task_id} successfully deleted.'}
-    raise HTTPException(status_code = 404, detail = 'Task not found. Please check the correctness of the ID.')
+    db.commit()
+    db.refresh(task)
+    return task
 
-# Статистика (прогресс) / Statistic (progress)
-@app.get('/stats')
-async def get_stats():
-    tasks_quantity = len(tasks_db)
-    done_tasks = sum(1 for task in tasks_db if task['is_done'])
-    percent = (done_tasks / tasks_quantity * 100) if tasks_quantity > 0 else 0 
-    tasks_with_deadline = [task for task in tasks_db if task.get('deadline') is not None]
-    most_priority = min(tasks_with_deadline, key = lambda tsk: tsk['deadline'] if tasks_with_deadline else None)
+@app.patch("/tasks/{task_id}/done")
+def mark_done(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task.is_done = True
+    db.commit()
+    return {"message": f"Task {task_id} marked as done"}
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    db.delete(task)
+    db.commit()
+    return {"message": f"Task {task_id} successfully deleted"}
+
+@app.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    tasks_quantity = db.query(Task).count()
+    done_tasks = db.query(Task).filter(Task.is_done == True).count()
+    percent = (done_tasks / tasks_quantity * 100) if tasks_quantity > 0 else 0
+    
+    most_priority = db.query(Task).filter(Task.deadline.isnot(None)).order_by(asc(Task.deadline)).first()
+    
     return {
         'tasks_quantity': tasks_quantity,
         'done_tasks': done_tasks,
@@ -104,34 +115,6 @@ async def get_stats():
         'most_priority': most_priority
     }
 
-if __name__ == '__main__':
-    uvicorn.run('main:app', reload=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", reload=True)
