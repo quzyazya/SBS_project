@@ -26,10 +26,23 @@ SessionLocal = sessionmaker(   # Создаётся "фабрика", котор
 class Base(DeclarativeBase):
     pass
 
-# Зависимость для FastAPI
+# Зависимость для FastAPI / 
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+# Вспомогательные функции
+
+def add_and_refresh(db, obj):
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+def commit_and_refresh(db, obj):
+    db.commit()
+    db.refresh(obj)
+    return obj
