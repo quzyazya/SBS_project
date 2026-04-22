@@ -10,7 +10,7 @@ class User(Base):
     email = Column(String(100), unique = True, index = True, nullable = False)
     hashed_password = Column(String(200), nullable = False)
     is_active = Column(Boolean, default = True)
-    created_at = Column(DateTime, server_deafult = func.now())
+    created_at = Column(DateTime, server_default = func.now())
 
     # Связь с задачами (один пользователь -> много задач)
     tasks = relationship('Task', back_populates = 'owner', cascade = 'all, delete-orphan')
