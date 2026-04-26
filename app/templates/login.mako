@@ -8,7 +8,7 @@
                 <h4 class="mb-0">🔐 Вход в систему</h4>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" action="/auth/login-page">
                     <div class="mb-3">
                         <label for="username" class="form-label">Email</label>
                         <input type="email" class="form-control" id="username" name="username" required>
