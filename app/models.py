@@ -26,6 +26,7 @@ class Task(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     deadline = Column(DateTime, nullable=True)
     is_done = Column(Boolean, default=False)
+    is_starred = Column(Boolean, default = False)
     
     owner_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     

@@ -17,7 +17,7 @@
             </div>
             <div class="col">
                 <h4 class="text-success">${stats['done_checkpoints']}</h4>
-                <small class="text-muted">Выполнено пунктов</small>
+                <small class="text-muted">Выполнено задач/пунктов</small>
             </div>
             <div class="col">
                 <h4 class="text-warning">${stats['total_checkpoints']}</h4>
@@ -58,12 +58,13 @@
         <h5 class="mb-0">📝 Мои задачи</h5>
     </div>
     <div class="list-group list-group-flush">
-        % for task in tasks:
+        % for idx, task in enumerate(tasks):
         <div class="list-group-item">
             <!-- Заголовок задачи -->
             <div class="row align-items-center mb-2">
                 <div class="col-md-8">
                     <h5 class="mb-0">
+                        <span class="badge bg-secondary me-2">#${idx + 1}</span>
                         <span class="badge bg-${task.deadline_color} me-2">●</span>
                         ${task.title}
                     </h5>
@@ -85,9 +86,23 @@
                         🕒 Создана: ${task.created_at.strftime('%d.%m.%Y %H:%M')}
                     </small>
                 </div>
+                <!-- КНОПКИ ДЕЙСТВИЙ -->
                 <div class="col-md-4 text-end">
+                    <!-- Кнопка закладки (избранное) -->
+                    <form method="post" action="/api/tasks/${task.id}/star-form" style="display: inline;">
+                        <button class="btn btn-sm ${'btn-warning' if task.is_starred else 'btn-outline-secondary'}" title="В избранное">
+                            % if task.is_starred:
+                                ⭐
+                            % else:
+                                ☆
+                            % endif
+                        </button>
+                    </form>
+                    <!-- Кнопка редактирования -->
+                    <a href="/api/tasks/${task.id}/edit-form" class="btn btn-sm btn-warning" title="Редактировать">✏️</a>
+                    <!-- Кнопка удаления -->
                     <form method="post" action="/api/tasks/${task.id}/delete-form" style="display: inline;">
-                        <button class="btn btn-sm btn-danger" title="Удалить задачу">🗑 Удалить</button>
+                        <button class="btn btn-sm btn-danger" title="Удалить задачу">🗑</button>
                     </form>
                 </div>
             </div>
@@ -165,12 +180,10 @@
                 </div>
             % endif
         </div>
-        <%doc>
         % else:
         <div class="list-group-item text-center text-muted">
             🎉 У вас пока нет задач. Создайте первую!
         </div>
-        </%doc>
         % endfor
     </div>
 </div>

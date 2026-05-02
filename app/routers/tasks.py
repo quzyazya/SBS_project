@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.database import get_db, add_and_refresh, commit_and_refresh
 from app.models import User, Task, CheckPoint
 from app.auth import get_current_user, decode_access_token
+from app.templating import render_template
 
 router = APIRouter(prefix="/api", tags=["Tasks API"])
 
@@ -234,6 +235,51 @@ def delete_task_frontend(task_id: int, db: Session = Depends(get_db), request: R
     db.commit()
     return RedirectResponse(url="/", status_code=303)
 
+@router.get('/tasks/{task_id}/edit-form')
+def edit_task_form(task_id: int, request: Request, db: Session = Depends(get_db)):
+    # Страница редактирования задачи
+    user = get_user_from_token(db, request)
+    if not user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    task = get_task_or_404(db, task_id, user.id)
+    return render_template('edit_task.mako', request=request, task=task)
+
+@router.post('/tasks/{task_id}/edit-form')
+def update_task_form(
+    task_id: int,
+    title: str = Form(...),
+    content: str = Form(None),
+    deadline: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    user = get_user_from_token(db, request)
+    if not user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    task = get_task_or_404(db, task_id, user.id)
+    task.title = title
+    task.content = content
+
+    if deadline:
+        task.deadline = datetime.strptime(deadline, '%Y-%m-%d')
+    else:
+        task.deadline = None
+    
+    db.commit()
+    return RedirectResponse(url='/', status_code=303)
+
+@router.post("/tasks/{task_id}/star-form")
+def star_task_frontend(task_id: int, db: Session = Depends(get_db), request: Request = None):
+    # Переключает статус в избранный (закладка)
+    user = get_user_from_token(db, request)
+    if not user:
+        return RedirectResponse(url="/auth/login-page", status_code=303)
+    
+    task = get_task_or_404(db, task_id, user.id)
+    task.is_starred = not task.is_starred
+    db.commit()
+    return RedirectResponse(url='/', status_code=303)
 
 @router.post('/tasks/{task_id}/checkpoints-form')
 def create_checkpoint_form(
@@ -250,7 +296,6 @@ def create_checkpoint_form(
     new_checkpoint = CheckPoint(title=title, task_id=task.id)
     add_and_refresh(db, new_checkpoint)
     return RedirectResponse(url='/', status_code=303)
-
 
 @router.post('/checkpoints/{checkpoint_id}/done-form')
 def checkpoint_done_form(
@@ -312,7 +357,7 @@ def api_get_stats(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     total_checkpoints = 0
     done_checkpoints = 0
-
+    
     for task in tasks:
         total_checkpoints += len(task.checkpoints)
         done_checkpoints += sum(1 for cp in task.checkpoints if cp.is_done)
