@@ -104,3 +104,5 @@ async def get_current_user_from_cookie(request: Request, db: Session = Depends(g
     
     user = get_user_by_email(db, email)
     return user
+
+
