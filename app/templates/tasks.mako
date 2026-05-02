@@ -16,14 +16,50 @@
                 <small class="text-muted">Всего задач</small>
             </div>
             <div class="col">
-                <h4 class="text-success">${stats['done_checkpoints']}</h4>
-                <small class="text-muted">Выполнено задач/пунктов</small>
+                <h4 class="text-success">${stats['done_tasks']}</h4>
+                <small class="text-muted">Выполнено задач</small>
             </div>
             <div class="col">
                 <h4 class="text-warning">${stats['total_checkpoints']}</h4>
                 <small class="text-muted">Всего пунктов</small>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Сообщение об ошибке лимита закрепления -->
+% if request.query_params.get('error') == 'star_limit':
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        ⚠️ Бесплатный тариф позволяет закрепить только 3 задачи. Повысьте статус до VIP, чтобы снять ограничения.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+% endif
+
+<!-- Блок тарифной карточки -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>👑 Ваш тариф:</strong>
+                % if current_user.role == 'vip':
+                    <span class="badge bg-warning">VIP</span> — безлимитные задачи
+                % else:
+                    <span class="badge bg-secondary">Free</span> — до 3 закреплённых задач
+                % endif
+            </div>
+            % if current_user.role != 'vip':
+                <a href="/upgrade-page" class="btn btn-sm btn-warning">⬆️ Upgrade to VIP</a>
+            % endif
+        </div>
+        
+        % if current_user.role != 'vip':
+            <div class="progress mt-2" style="height: 10px;">
+                <div class="progress-bar bg-info" style="width: ${(stats['starred_count'] / 3 * 100)}%">
+                </div>
+            </div>
+            <small class="text-muted">Закреплено ${stats['starred_count']} из 3 задач</small>
+        % endif
+        
     </div>
 </div>
 

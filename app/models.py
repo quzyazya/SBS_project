@@ -13,7 +13,7 @@ class User(Base):
     hashed_password = Column(String(200), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
-    
+    role = Column(String(20), default='user')  # f.Ex: (user, vip)
     tasks = relationship('Task', back_populates='owner', cascade='all, delete-orphan')
 
 

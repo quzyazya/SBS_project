@@ -38,17 +38,26 @@ def register_page_submit(
     
     new_user = User(
         email=email,
-        hashed_password=get_password_hash(password)
+        hashed_password=get_password_hash(password),
+        role='user'   # по умолчанию обычный пользователь
     )
     add_and_refresh(db, new_user)
     return RedirectResponse(url="/auth/login-page", status_code=303)
-
 
 @router.get("/login-page")
 def login_page(request: Request):
     """Страница входа HTML"""
     return render_template("login.mako", request=request, error=None)
 
+@router.post('/upgrade-to-vip')
+def upgrade_to_vip(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Повышает роль пользователя до VIP
+    current_user.role = 'vip'
+    db.commit()
+    return {'message': 'Поздравляем, вы теперь VIP пользователь! Вам доступно неограниченное количество задач!'}
 
 @router.post("/login-page")
 def login_page_submit(

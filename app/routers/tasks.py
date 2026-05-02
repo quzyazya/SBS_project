@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import asc
@@ -7,6 +7,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from app.database import get_db, add_and_refresh, commit_and_refresh
+from app.dependencies import can_create_task, can_star_task
 from app.models import User, Task, CheckPoint
 from app.auth import get_current_user, decode_access_token
 from app.templating import render_template
@@ -168,7 +169,7 @@ def api_delete_checkpoint(checkpoint_id: int, db: Session = Depends(get_db), cur
     return {'message': f'Чекпоинт {checkpoint_id} удален'}
 
 
-# ========== HTML ФОРМЫ ==========
+# ========== HTML ФОРМЫ (фронтенд) ==========
 
 @router.post("/tasks-form")
 def create_task_frontend(
@@ -182,6 +183,10 @@ def create_task_frontend(
     if not user:
         return RedirectResponse(url="/auth/login-page", status_code=303)
     
+    # Проверка лимита создания задач (всегда True, так как лимит только на закрепление)
+    if not can_create_task(user, db):
+        return RedirectResponse(url="/?error=create_limit", status_code=303)
+
     deadline_dt = None
     if deadline:
         deadline_dt = datetime.strptime(deadline, '%Y-%m-%d')
@@ -235,14 +240,16 @@ def delete_task_frontend(task_id: int, db: Session = Depends(get_db), request: R
     db.commit()
     return RedirectResponse(url="/", status_code=303)
 
+
 @router.get('/tasks/{task_id}/edit-form')
 def edit_task_form(task_id: int, request: Request, db: Session = Depends(get_db)):
-    # Страница редактирования задачи
+    """Страница редактирования задачи"""
     user = get_user_from_token(db, request)
     if not user:
         return RedirectResponse(url='/auth/login-page', status_code=303)
     task = get_task_or_404(db, task_id, user.id)
     return render_template('edit_task.mako', request=request, task=task)
+
 
 @router.post('/tasks/{task_id}/edit-form')
 def update_task_form(
@@ -269,17 +276,30 @@ def update_task_form(
     db.commit()
     return RedirectResponse(url='/', status_code=303)
 
+
 @router.post("/tasks/{task_id}/star-form")
-def star_task_frontend(task_id: int, db: Session = Depends(get_db), request: Request = None):
-    # Переключает статус в избранный (закладка)
+def star_task_frontend(
+    task_id: int, 
+    db: Session = Depends(get_db), 
+    request: Request = None
+):
+    """Переключает статус избранного (закладка) с проверкой лимита для Free"""
     user = get_user_from_token(db, request)
     if not user:
         return RedirectResponse(url="/auth/login-page", status_code=303)
     
     task = get_task_or_404(db, task_id, user.id)
+    
+    # Если задача НЕ закреплена и пользователь пытается закрепить
+    if not task.is_starred:
+        if not can_star_task(user, db):
+            return RedirectResponse(url="/?error=star_limit", status_code=303)
+    
+    # Переключаем закладку
     task.is_starred = not task.is_starred
     db.commit()
-    return RedirectResponse(url='/', status_code=303)
+    return RedirectResponse(url="/", status_code=303)
+
 
 @router.post('/tasks/{task_id}/checkpoints-form')
 def create_checkpoint_form(
@@ -296,6 +316,7 @@ def create_checkpoint_form(
     new_checkpoint = CheckPoint(title=title, task_id=task.id)
     add_and_refresh(db, new_checkpoint)
     return RedirectResponse(url='/', status_code=303)
+
 
 @router.post('/checkpoints/{checkpoint_id}/done-form')
 def checkpoint_done_form(

@@ -36,7 +36,9 @@ async def home(
     # Считаем количество выполненных задач
     total_tasks = len(tasks_db)
     done_tasks = sum(1 for task in tasks_db if task.is_done)
-    
+    # Считаем количество закрепленных задач
+    starred_count = sum(1 for task in tasks_db if task.is_starred)
+
     # Глобальный прогресс = процент выполненных задач
     global_percent = (done_tasks / total_tasks * 100) if total_tasks > 0 else 0
     # =================================
@@ -50,6 +52,7 @@ async def home(
             'done_tasks': done_tasks,
             'total_checkpoints': total_checkpoints,  # можно убрать или оставить для совместимости
             'done_checkpoints': f'{done_tasks}/{done_checkpoints}',    # можно убрать или оставить для совместимости
+            'starred_count': starred_count,
             'percent': round(global_percent, 1)
         }
     )
