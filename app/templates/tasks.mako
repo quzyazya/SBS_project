@@ -17,7 +17,7 @@
             </div>
             <div class="col">
                 <h4 class="text-success">${stats['done_tasks']}</h4>
-                <small class="text-muted">Выполнено задач</small>
+                <small class="text-muted">Выполнено задач|пунктов</small>
             </div>
             <div class="col">
                 <h4 class="text-warning">${stats['total_checkpoints']}</h4>
@@ -26,6 +26,19 @@
         </div>
     </div>
 </div>
+
+% if request.query_params.get('payment') == 'success':
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        🎉 Поздравляем! Вы успешно приобрели VIP статус. Теперь вам доступны неограниченные закрепления задач.
+        <button type='button' class="btn-close" data-bs-dismiss='alert'></button>
+    </div>
+% endif
+% if request.query_params.get('payment') == 'canceled':
+    <div class='alert alert-warning alert-dismissible fade show' role='alert'>
+        Оплата отменена. Вы можете попробовать снова в любое время.
+        <button type='button' class='btn-close' data-bs-dismiss="alert"></button>
+    </div>
+% endif
 
 <!-- Сообщение об ошибке лимита закрепления -->
 % if request.query_params.get('error') == 'star_limit':

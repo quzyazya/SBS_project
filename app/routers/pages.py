@@ -32,7 +32,6 @@ async def home(
         total_checkpoints += len(task.checkpoints)
         done_checkpoints += sum(1 for cp in task.checkpoints if cp.is_done)
 
-    # ========== НОВАЯ ЛОГИКА ==========
     # Считаем количество выполненных задач
     total_tasks = len(tasks_db)
     done_tasks = sum(1 for task in tasks_db if task.is_done)
@@ -49,10 +48,15 @@ async def home(
         tasks=tasks_db,
         stats={
             'total_tasks': total_tasks,
-            'done_tasks': done_tasks,
+            'done_tasks': f'{done_tasks}|{done_checkpoints}',
             'total_checkpoints': total_checkpoints,  # можно убрать или оставить для совместимости
             'done_checkpoints': f'{done_tasks}/{done_checkpoints}',    # можно убрать или оставить для совместимости
             'starred_count': starred_count,
             'percent': round(global_percent, 1)
         }
     )
+
+@router.get('/upgrade-page')
+def upgrade(request: Request):
+    # Страница выбора VIP подписки
+    return render_template('upgrade.mako', request=request)

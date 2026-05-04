@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.routers import auth, tasks, pages
+from app.routers import auth, tasks, pages, payments
 
 # Создаем приложение 
 app = FastAPI(
@@ -17,6 +17,7 @@ app.mount('/static', StaticFiles(directory = 'app/static'), name = 'static')
 app.include_router(auth.router)
 app.include_router(tasks.router)
 app.include_router(pages.router)
+app.include_router(payments.router)
 
 # Запуск
 if __name__ == '__main__':

@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASS: str
     DB_NAME: str
+
+    # ЮКаssa
+    YOOKASSA_SHOP_ID: str
+    YOOKASSA_SECRET_KEY: str
     
     # для синхронных операций (Alembic, psycopg2)
     @property
