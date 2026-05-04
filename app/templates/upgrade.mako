@@ -1,8 +1,8 @@
-<%inherit file="base.mako">
+<%inherit file="base.mako" />
 <%def name="title()">VIP подписка - ProgressPal</%def>
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <h1 class="text-center mb-4">🚀 Повысьте продуктивность с VIP</h1>
+        <h1 style='margin-left: 50px;' class="mb-4">🚀  Повысьте продуктивность с VIP</h1>
 
         <!-- Преимущества VIP -->
         <div class="card mb-4">
@@ -11,7 +11,7 @@
                 <div class="row text-center mt-3">
                     <div class="col-md-6 mb-3">
                         <div class="border rounded p-3 h-100">
-                            <span style="font-size: 2rem;">⭐</span>
+                            <span style="font-size: 2rem;">📌</span>
                             <h6 class="mt-2">Неограниченные закрепления</h6>
                             <small class="text-muted">Free: до 3 закреплённых задач<br>VIP: безлимит на задачи</small>
                         </div>
@@ -19,8 +19,8 @@
                     <div class="col-md-6 mb-3">
                         <div class="border rounded p-3 h-100">
                             <span style="font-size: 2rem;">📅</span>
-                            <h6 class="mt-2">Удобный календарь</h6>
-                            <small class="text-muted">VIP: календарь задач с дедлайнами</small>
+                            <h6 class="mt-2">Функциональный календарь</h6>
+                            <small class="text-muted">Free: нет календаря задач<br>VIP: календарь задач с дедлайнами</small>
                         </div>
                     </div>
                 </div>
@@ -34,6 +34,7 @@
                 <div class="card h-100 text-center border-warning">
                     <div class="card-header bg-warning text-dark">
                         <h4 class="mb-0">🔥 VIP Месяц</h4>
+                        <span class="badge bg-light text-dark mt-1">✨ ВЫГОДНОЕ ПРЕДЛОЖЕНИЕ</span>
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
@@ -41,14 +42,14 @@
                             <span style="font-size: 2rem; font-weight: bold; color: #ff6b6b;"> 25₽</span>
                             <span class="text-muted">/месяц</span>
                         </div>
-                        <ul class="list-unstyled text-align-left">
-                            <li>✓ ⭐ Неограниченные закрепления</li>
+                        <ul class="list-unstyled text-start">
+                            <li>✓ 📌 Неограниченные закрепления</li>
                             <li>✓ 📅 Календарь задач с дедлайнами</li>
                             <li>✓ 🔥 Экономия 50%</li>
                         </ul>
                         <form action="/payments/create-payment" method="post">
                             <input type="hidden" name="interval" value="month">
-                            <button type="submit" class="btn btn-warning w-100 mt-3">Оплатить 25₽</button>
+                            <button type="submit" class="btn btn-warning w-100 mt-3">Оплатить 25₽💵</button>
                         </form>
                     </div>
                 </div>
@@ -68,13 +69,13 @@
                             <span class="text-muted">/год</span>
                         </div>
                         <ul class="list-unstyled text-start">
-                            <li>✓ ⭐ Неограниченные закрепления</li>
+                            <li>✓ 📌 Неограниченные закрепления</li>
                             <li>✓ 📅 Календарь задач с дедлайнами</li>
                             <li>✓ 🔥 Экономия 57%</li>
                         </ul>
                         <form action="/payments/create-payment" method="post">
                             <input type="hidden" name="interval" value="year">
-                            <button type="submit" class="btn btn-success w-100 mt-3">Оплатить 250₽</button>
+                            <button type="submit" class="btn btn-success w-100 mt-3">Оплатить 250₽💵</button>
                         </form>
                     </div>
                 </div>
@@ -93,10 +94,10 @@
                             <tr><th>Функция</th><th>Free</th><th>VIP</th></tr>
                         </thead>
                         <tbody>
-                            <tr><td class="text-start">Создание задач</td><td>✅ Безлимит</td><td>✅ Безлимит</td></tr>
-                            <tr><td class="text-start">Закрепление задач (⭐)</td><td>⚠️ До 3</td><td>✅ Безлимит</td></tr>
-                            <tr><td class="text-start">Календарь задач</td><td>❌</td><td>✅ Доступен</td></tr>
-                            <tr><td class="text-start">Приоритетная поддержка</td><td>❌</td><td>✅</td></tr>
+                            <tr><td class="text-start">Создание задач</td><td>✔️ Безлимит</td><td>✔️ Безлимит</td></tr>
+                            <tr><td class="text-start">Закрепление задач (📌)</td><td>⚠️ До 3</td><td>✔️ Безлимит</td></tr>
+                            <tr><td class="text-start">Календарь задач</td><td>❌</td><td>✔️ Доступен</td></tr>
+                            <tr><td class="text-start">Приоритетная поддержка</td><td>❌</td><td>✔️</td></tr>
                         </tbody>
                     </table>
                 </div>

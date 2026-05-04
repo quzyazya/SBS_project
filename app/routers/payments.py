@@ -1,20 +1,22 @@
+import json
+
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import uuid
-from yookassa import Configuration, Payment, PaymentMethod
+from yookassa import Configuration, Payment
 
 from app.config import settings
 from app.database import get_db
 from app.models import User
-from app.auth import get_current_user, get_user_from_token
-from app.templating import render_template
+from app.auth import get_current_user
+# from app.templating import render_template
 
 router = APIRouter(prefix='/payments', tags=['Payments'])
 
-# Настройка ЮKassa
+# Настраиваем ЮKassa с ключами из .env
+Configuration.configure(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY)
 
 @router.post('/create-payment')
 async def create_payment(interval: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -66,53 +68,66 @@ async def create_payment(interval: str = Form(...), db: Session = Depends(get_db
 
 @router.get('/success')
 async def payment_success(
-    order_id: str,
     interval: str,
-    request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Страница успешной оплаты
+    # Страница успешной оплаты (вызывается после возврата из ЮKassa)
 
-    # Получаем пользователя из cookie
-    user = get_user_from_token(db, request)
-
-    if user:
+    if current_user:
         # Обновляем статус пользователя
         if interval == 'month':
-            user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+            current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
         else:
-            user.subscription_expires_at = datetime.utcnow() + timedelta(days=365)
+            current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=365)
         
-        user.role = 'vip'
+        current_user.role = 'vip'
         db.commit()
 
     return RedirectResponse(url='/?payment-success', status_code=303)
 
 @router.get('/cancel')
 async def payment_cancel():
+    # Страница отмены оплаты
     return RedirectResponse(url='/?payment-canceled')
 
 @router.post('/webhook')
 async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
-    # Обработчик вебхуков ЮKassa
+    # Обработчик вебхуков ЮKassa (страховка на случай еслит пользователь не вернулся на сайт)
     body = await request.json()
 
     # Проверяем подпись вебхука 
     
-    if body.get('event') == 'payment.succeeded':
-        payment = body.get('object', {})
-        metadata = payment.get('metadata', {})
-        user_id = int(metadata.get('user_id', 0))
-        interval = metadata.get('interval', 'month')
+    try:
+        data = json.loads(body)
 
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            if interval == 'month':
-                user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
-            else:
-                user._subscription_expires_at = datetime.utcnow() + timedelta(days=365)
-            user.role = 'vip'
-            db.commit()
+        if data.get('event') == 'payment.succeeded':
+            payment = body.get('object', {})
+            metadata = payment.get('metadata', {})
+            user_id = int(metadata.get('user_id', 0))
+            interval = metadata.get('interval', 'month')
+
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                if interval == 'month':
+                    user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+                else:
+                    user._subscription_expires_at = datetime.utcnow() + timedelta(days=365)
+                user.role = 'vip'
+                db.commit()
+
+    except json.JSONDecodeError:    
+        return JSONResponse(content={
+            'status': 'error',
+            'message': 'Invalid JSON' 
+        }, status_code=400)
+    
+    except Exception as e:
+        print(f'Webhook error: {e}')
+        return JSONResponse(content={
+            'status': 'error',
+            'message': str(e)
+        }, status_code=400) 
 
     return JSONResponse(content={'status': 'ok'})
 
