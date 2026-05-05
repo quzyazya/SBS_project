@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.database import get_db, add_and_refresh, commit_and_refresh
 from app.dependencies import can_create_task, can_star_task
-from app.models import User, Task, CheckPoint
+from app.models import User, Task, CheckPoint, ArchivedTask
 from app.auth import get_current_user, decode_access_token
 from app.templating import render_template
 
@@ -190,6 +190,11 @@ def create_task_frontend(
     deadline_dt = None
     if deadline:
         deadline_dt = datetime.strptime(deadline, '%Y-%m-%d')
+
+        # Проверка: нельзя создавать задачи с дедлайном в прошлом
+        if deadline_dt.date() < datetime.now().date():
+            # Перенаправляем обратно с сообщением об ошибке
+            return RedirectResponse(url='/?error=past_deadline', status_code=303)
     
     new_task = Task(
         title=title,
@@ -208,6 +213,17 @@ def mark_done_frontend(task_id: int, db: Session = Depends(get_db), request: Req
     if not user:
         return RedirectResponse(url="/auth/login-page", status_code=303)
     task = get_task_or_404(db, task_id, user.id)
+
+    # Архивируем задачу перед удалением
+    archived = ArchivedTask(
+        original_id = task.id, 
+        title = task.title,
+        deadline = task.deadline,
+        completed_at = datetime.utcnow(),
+        user_id = user.id
+    )
+    db.add(archived)
+
     task.is_done = True
 
     for cp in task.checkpoints:
@@ -236,6 +252,17 @@ def delete_task_frontend(task_id: int, db: Session = Depends(get_db), request: R
     if not user:
         return RedirectResponse(url="/auth/login-page", status_code=303)
     task = get_task_or_404(db, task_id, user.id)
+
+    # Архивируем задачу перед удалением
+    archived = ArchivedTask(
+        original_id=task.id,
+        title=task.title,
+        deadline=task.deadline,
+        completed_at=datetime.utcnow(),
+        user_id=user.id
+    )
+    db.add(archived)
+
     db.delete(task)
     db.commit()
     return RedirectResponse(url="/", status_code=303)

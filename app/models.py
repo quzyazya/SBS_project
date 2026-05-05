@@ -106,3 +106,15 @@ class CheckPoint(Base):
     
     task_id = Column(Integer, ForeignKey('tasks.id', ondelete='CASCADE'), nullable=False)
     task = relationship('Task', back_populates='checkpoints')
+
+class ArchivedTask(Base):
+    __tablename__ = 'archived_tasks'
+
+    id = Column(Integer, primary_key = True, index = True)
+    original_id = Column(Integer, nullable = False)     # ID исходной задачи
+    title = Column(String(200), nullable = False)
+    deadline = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, default=datetime.utcnow)  
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    user = relationship('User')

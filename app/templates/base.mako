@@ -17,14 +17,14 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">📋 ProgressPal</a>
+            <a class="navbar-brand" href="/">📒 ProgressPal</a>
             <div class="navbar-nav ms-auto">
                 % if current_user:
                     <span class="nav-item nav-link text-light">👤 ${current_user.email}</span>
                     <a class="nav-item nav-link" href="/auth/logout">🚪 Выйти</a>
                 % else:
                     <a class="nav-item nav-link" href="/auth/login-page">🔐 Вход</a>
-                    <a class="nav-item nav-link" href="/auth/register-page">📝 Регистрация</a>
+                    <a class="nav-item nav-link" href="/auth/register-page">🪪 Регистрация</a>
                 % endif
             </div>
         </div>

@@ -5,11 +5,11 @@
     <div class="col-md-5">
         <div class="card">
             <div class="card-header bg-success text-white text-center">
-                <h4 class="mb-0">📝 Регистрация</h4>
+                <h4 class="mb-0">🪪 Регистрация</h4>
             </div>
             <div class="card-body">
                 <form method="post">
-                    <div class="mb-3">
+                    <div class="mb-3">  
                         <label for="email" class="form-label">Email</label>
                         <input type="email" class="form-control" id="email" name="email" required>
                     </div>

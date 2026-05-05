@@ -20,9 +20,9 @@ Configuration.configure(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY)
 
 @router.post('/create-payment')
 async def create_payment(interval: str = Form(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Создает платеж в ЮKassa
+    # Создает платеж в ЮKassa и перенаправляет пользователя на страницу оплаты
 
-    # Определяем сумму и описание
+    # Определяем сумму и описание в зависимости от выбранной подписки
     if interval == 'month':
         amount = 25.00
         description = 'VIP подписка на 1 месяц'
