@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import ArchivedTask, Task
@@ -23,18 +24,6 @@ async def home(
     if not current_user:
         return render_template("login.mako", request=request, error="Пожалуйста, войдите в систему")
     
-    from sqlalchemy import asc, nulls_last, desc
-    from datetime import datetime, timedelta
-
-    # Определяем текущий месяц для календаря
-    now = datetime.utcnow()
-    if year is None or month is None:
-        calendar_year = now.year
-        calendar_month = now.month
-    else:
-        calendar_year = year
-        calendar_month = month
-
     # Получаем все задачи для создания словаря номеров (без поиска)
     all_tasks_for_numbers = db.query(Task).filter(
         Task.owner_id == current_user.id
@@ -104,6 +93,72 @@ async def home(
             if task.deadline.date() < datetime.utcnow().date():
                 overdue_tasks_count += 1
 
+    from sqlalchemy import asc, nulls_last, desc
+    from datetime import datetime, timedelta
+
+    #  КАЛЕНДАРЬ
+
+    calendar_data, calendar_year, calendar_month = None, None, None
+    can_use_calendar = False
+
+    # Проверка доступа к календарю
+    days_since_reg = (datetime.utcnow() - current_user.created_at).days
+
+    if current_user.role == 'vip':
+        can_use_calendar = True
+    elif days_since_reg <= 7 and not current_user.trial_used:
+        can_use_calendar = True
+        if days_since_reg > 0:
+            current_user.trial_used = True
+            db.commit()
+    
+    if can_use_calendar:
+        # Определяем текущий месяц для календаря
+        now = datetime.utcnow()
+        if year is None or month is None:
+            calendar_year = now.year
+            calendar_month = now.month
+        else:
+            calendar_year = year
+            calendar_month = month
+
+        # Данные для календаря (только для VIP)
+        calendar_data = []
+        for task in tasks_db:
+            if task.deadline:
+                days_left = (task.deadline.date() - datetime.utcnow().date()).days
+                if days_left <= 0:
+                    color = 'red'
+                elif days_left <= 3:
+                    color = 'orange'
+                else:
+                    color = 'green'
+                
+                calendar_data.append({
+                    'id': task.id,
+                    'number': task_number_map.get(task.id, 0),
+                    'date': task.title[:20],
+                    'color': color,
+                    'is_archived': False
+                })
+        
+        # Архивные задачи (последний месяц)
+        one_month_ago = datetime.utcnow() - timedelta(days = 30)
+        archived_tasks = db.query(ArchivedTask).filter(
+            ArchivedTask.user_id == current_user.id,
+            ArchivedTask.completed_at >= one_month_ago
+        ).all()
+
+        for task in archived_tasks:
+            if task.deadline:
+                calendar_data.append({
+                    'id': task.original_id,
+                    'number': None,  # Архивыне задачи не имеют номера в текущем списке
+                    'date': task.deadline.strftime('%Y-%m-%d'),
+                    'title': task.title[:20] + ' (выполнена)',
+                    'color': 'secondary',
+                    'is_archived': True
+                })
     # Ближайший дедлайн
     '''from datetime import datetime
     nearest_deadline = None
@@ -119,44 +174,6 @@ async def home(
             nearest_deadline = f"📅 Завтра: {nearest_task.title[:20]}"
         else:
             nearest_deadline = f"📅 Через {days_left} дн.: {nearest_task.title[:20]}"'''
-
-    calendar_data = []
-    for task in tasks_db:
-        if task.deadline:
-            days_left = (task.deadline.date() - datetime.utcnow().date()).days
-            if days_left <= 0:
-                color = 'red'
-            elif days_left <= 3:
-                color = 'orange'
-            else:
-                color = 'green'
-            
-            calendar_data.append({
-                'id': task.id,
-                'number': task_number_map.get(task.id, 0),
-                'date': task.deadline.strftime('%Y-%m-%d'),
-                'title': task.title[:20],
-                'color': color,
-                'is_archived': False
-            })
-
-    # Архивные задачи (последний месяц)
-    one_month_ago = datetime.utcnow() - timedelta(days = 30)
-    archived_tasks = db.query(ArchivedTask).filter(
-        ArchivedTask.user_id == current_user.id,
-        ArchivedTask.completed_at >= one_month_ago
-    ).all()
-
-    for task in archived_tasks:
-        if task.deadline:
-            calendar_data.append({
-                'id': task.original_id,
-                'number': None,  # Архивыне задачи не имеют номера в текущем списке
-                'date': task.deadline.strftime('%Y-%m-%d'),
-                'title': task.title[:20] + ' (выполнена)',
-                'color': 'secondary',
-                'is_archived': True
-            })
 
     return render_template('tasks.mako',
         request=request,
@@ -179,7 +196,9 @@ async def home(
         search_query=search,
         calendar_year=calendar_year,
         calendar_month=calendar_month,
-        calendar_data=calendar_data
+        calendar_data=calendar_data,
+        can_use_calendar=can_use_calendar,
+        days_left_trial=(7 - days_since_reg) if days_since_reg <= 7 else 0
     )
 
 @router.get('/create-task')
@@ -200,3 +219,44 @@ def create_task_page(
 def upgrade(request: Request):
     # Страница выбора VIP подписки
     return render_template('upgrade.mako', request=request)
+
+@router.get('/profile')
+def profile_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return render_template('login.mako', request=request, error='Пожалуйста, войдите в систему')
+    return render_template('profile.mako', request=request, current_user=current_user)
+
+@router.post('/profile/enable-2fa')
+def enable_2fa(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    if not current_user.phone:
+        return RedirectResponse(url='/profile?error=no_phone', status_code=303)
+    
+    current_user.is_2fa_enabled = True
+    db.commit()
+    
+    return RedirectResponse(url='/profile?success=2fa_enabled', status_code=303)
+
+@router.post('/profile/disable-2fa')
+def disable_2fa(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    current_user.is_2fa_enabled = False
+    db.commit()
+
+    return RedirectResponse(url='/profile?success=2fa_disabled', status_code=303)

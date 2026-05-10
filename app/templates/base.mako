@@ -20,8 +20,9 @@
             <a class="navbar-brand" href="/">📒 ProgressPal</a>
             <div class="navbar-nav ms-auto">
                 % if current_user:
-                    <span class="nav-item nav-link text-light">👤 ${current_user.email}</span>
+                    <span class="nav-item nav-link text-light">👤 ${current_user.username}</span>
                     <a class="nav-item nav-link" href="/auth/logout">🚪 Выйти</a>
+                    <a class='nav-item nav-link' href='/profile'>⚙️ Профиль</a>
                 % else:
                     <a class="nav-item nav-link" href="/auth/login-page">🔐 Вход</a>
                     <a class="nav-item nav-link" href="/auth/register-page">🪪 Регистрация</a>
