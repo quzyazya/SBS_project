@@ -4,6 +4,7 @@ import json
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import asc, desc, nulls_last
 from app.database import get_db
 from app.models import ArchivedTask, Task
 from app.auth import get_current_user_from_cookie
@@ -64,7 +65,7 @@ async def home(
             'is_starred': task.is_starred,
             'created_at': task.created_at,
             'progress_percent': task.progress_percent,
-            'checkpoints': task.checkpoints
+            'checkpoints': sorted(task.checkpoints, key=lambda cp: cp.created_at)
         })
 
     total_checkpoints, done_checkpoints = 0, 0
@@ -84,7 +85,7 @@ async def home(
     # Глобальный прогресс = процент выполненных задач
     global_percent = (done_tasks / total_tasks * 100) if total_tasks > 0 else 0
     
-    from datetime import datetime
+    from datetime import datetime, timedelta
     
     overdue_tasks_count = 0
 
@@ -92,9 +93,6 @@ async def home(
         if task.deadline and not task.is_done:
             if task.deadline.date() < datetime.utcnow().date():
                 overdue_tasks_count += 1
-
-    from sqlalchemy import asc, nulls_last, desc
-    from datetime import datetime, timedelta
 
     #  КАЛЕНДАРЬ
 
@@ -137,7 +135,7 @@ async def home(
                 calendar_data.append({
                     'id': task.id,
                     'number': task_number_map.get(task.id, 0),
-                    'date': task.title[:20],
+                    'date': task.deadline.strftime('%Y-%m-%d'),
                     'color': color,
                     'is_archived': False
                 })
@@ -189,13 +187,12 @@ async def home(
             'active_checkpoints': active_checkpoints,
             'starred_count': starred_count,
             'overdue_tasks_count': overdue_tasks_count,
-            'calendar_data': calendar_data,
             'percent': round(global_percent, 1),
             # 'nearest_deadline': nearest_deadline
         },
         search_query=search,
-        calendar_year=calendar_year,
-        calendar_month=calendar_month,
+        calendar_year=calendar_year if can_use_calendar else datetime.utcnow().year,
+        calendar_month=calendar_month if can_use_calendar else datetime.utcnow().month,
         calendar_data=calendar_data,
         can_use_calendar=can_use_calendar,
         days_left_trial=(7 - days_since_reg) if days_since_reg <= 7 else 0

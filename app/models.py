@@ -16,6 +16,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     role = Column(String(20), default='user')  # f.Ex: (user, vip)
+    nackname_changed = Column(Boolean, deafault=False)
 
     # 2FA поля
     is_2fa_enabled = Column(Boolean, default=False)
@@ -44,7 +45,12 @@ class Task(Base):
     @property
     def progress_percent(self) -> int:
         """Процент выполнения задачи (0% или 100%, только при полном завершении)"""
-        return 100 if self.is_done else 0
+        if self.is_done:
+            return 100
+        if not self.checkpoints:
+            return 0
+        done = sum(1 for cp in self.checkpoints if cp.is_done)
+        return int(done /  len(self.checkpoints) * 100)
     
     @property
     def deadline_color(self) -> str:

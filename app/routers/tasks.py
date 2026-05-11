@@ -131,7 +131,7 @@ def api_delete_task(task_id: int, db: Session = Depends(get_db), current_user: U
 @router.get('/tasks/{task_id}/checkpoints', response_model=List[CheckpointResponse])
 def api_get_checkpoints(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     task = get_task_or_404(db, task_id, current_user.id)
-    return task.checkpoints
+    return sorted(task.checkpoints, key=lambda cp: cp.created_at)
 
 
 @router.post('/tasks/{task_id}/checkpoints', response_model=CheckpointResponse)

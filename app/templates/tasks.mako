@@ -45,8 +45,15 @@
         </div>
         
         <div class="card-body p-2">
-            <%namespace name="calendar" file="calendar.mako" />
-            ${calendar.render_calendar(calendar_data, current_user, calendar_year, calendar_month)}
+            % if calendar_data:
+                <%namespace name="calendar" file="calendar.mako" />
+                ${calendar.render_calendar(calendar_data, current_user, calendar_year, calendar_month)}
+            % else:
+                <div class='text-center text-muted p-3'>
+                    🔒 Календарь доступен только VIP пользователям
+                    <a href='/upgrade-page' class='btn btn-sm btn-warning mt-2 d-block'>🔝 Upgrade to VIP</a>
+                </div>
+            % endif
         </div>
     </div>
 </div>
@@ -106,7 +113,7 @@
                                 <div class="progress mt-2" style="height: 6px; border-radius: 3px;">
                                     <div class="progress-bar bg-warning" style="width: ${(stats['starred_count'] / 3 * 100)}%"></div>
                                 </div>
-                                <small class="text-muted">лимит: 3</small>
+                                <small class="text-muted">🔒Лимит: 3</small>
                             % endif
                         </div>
                     </div>
@@ -225,30 +232,37 @@
             <div class="list-group-item">
                 <div class="row align-items-center mb-2">
                     <div class="col-md-8">
-                        <h5 class="mb-0">
-                            <span class="badge bg-secondary me-2">#${task['number']}</span>
-                            <span class="badge bg-${task['deadline_color']} me-2">●</span>
-                            ${task['title']}
-                        </h5>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-secondary">#${task['number']}</span>
+                            <span class="badge bg-${task['deadline_color']}">●</span>
+                            <strong class="flex-grow-1">${task['title']}</strong>
+                            <div class="progress" style="width: 80px; height: 8px;">
+                                <div class="progress-bar bg-success" style="width: ${task['progress_percent']}%"></div>
+                            </div>
+                            <span class="small text-muted">${task['progress_percent']}%</span>
+                        </div>
+                        
                         % if task['content']:
-                            <small class="text-muted d-block mt-1">📝 ${task['content']}</small>
+                            <small class="text-muted d-block mt-1 ms-2">📝 ${task['content']}</small>
                         % endif
+                        
                         % if task['is_done']:
-                            <small class="text-success d-block">☑️ Решена: ${task['created_at'].strftime('%d.%m.%Y %H:%M')}</small>
+                            <small class="text-success d-block ms-2">☑️ Решена: ${task['created_at'].strftime('%d.%m.%Y %H:%M')}</small>
                         % elif task['deadline']:
-                            <small class="text-${task['deadline_color']} d-block">
+                            <small class="text-${task['deadline_color']} d-block ms-2">
                                 📅 ${task['deadline'].strftime('%d.%m.%Y')} — ${task['deadline_text']}
                             </small>
                         % endif
-                        <small class="text-muted d-block">🕒 Создана: ${task['created_at'].strftime('%d.%m.%Y %H:%M')}</small>
-                    </div>
+                        
+                        <small class="text-muted d-block ms-2">🕒 Создана: ${task['created_at'].strftime('%d.%m.%Y %H:%M')}</small>
+                     </div>
                     <div class="col-md-4 text-end">
                         <form method="post" action="/api/tasks/${task['id']}/star-form" style="display: inline;">
                             <button class="btn btn-sm ${'btn-warning' if task['is_starred'] else 'btn-outline-secondary'}">
                                 % if task['is_starred']:
-                                    ⭐
-                                % else:
-                                    ☆ 
+                                ⭐ 
+                                % else: 
+                                ☆ 
                                 % endif
                             </button>
                         </form>
@@ -259,10 +273,7 @@
                     </div>
                 </div>
                 
-                <div class="progress mb-2" style="height: 20px;">
-                    <div class="progress-bar bg-info" style="width: ${task['progress_percent']}%">${task['progress_percent']}%</div>
-                </div>
-                
+                <!-- Только для НЕвыполненных задач (форма добавления пунктов) -->
                 % if not task['is_done']:
                     <form method="post" action="/api/tasks/${task['id']}/checkpoints-form" class="mb-2">
                         <div class="input-group input-group-sm">
@@ -270,17 +281,20 @@
                             <button class="btn btn-outline-primary" type="submit">+ Добавить пункт</button>
                         </div>
                     </form>
+                    
                     % if not task['checkpoints']:
                         <form method="post" action="/api/tasks/${task['id']}/done-form" class="mb-2">
                             <button class="btn btn-sm btn-success w-100">☑️ Завершить задачу</button>
                         </form>
                         <small class="text-muted ms-3">📌 Нет пунктов. Добавьте первый!</small>
                     % endif
+                    
                     % if task['checkpoints']:
                         <div class="alert alert-info mb-2 text-center py-1 small">📋 Управляйте выполнением через пункты ниже</div>
                     % endif
                 % endif
                 
+                <!-- Список пунктов -->
                 % if task['checkpoints']:
                     <div class="list-group list-group-flush ms-3">
                     % for cp in task['checkpoints']:
@@ -316,7 +330,7 @@
                 % endif
             </div>
             % else:
-                <div class="list-group-item text-center text-muted">🎉 У вас пока нет задач. Создайте первую!</div>
+            <div class="list-group-item text-center text-muted">🎉 У вас пока нет задач. Создайте первую!</div>
             % endfor
         </div>
     </div>
