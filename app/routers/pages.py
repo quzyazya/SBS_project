@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import ArchivedTask, Task
 from app.auth import get_current_user_from_cookie
 from app.templating import render_template
+from app.tasks import get_user_role_from_cache, set_user_role_cache
 
 router = APIRouter(tags=["Pages"])
 
@@ -25,6 +26,13 @@ async def home(
     if not current_user:
         return render_template("login.mako", request=request, error="Пожалуйста, войдите в систему")
     
+    cached_role = get_user_role_from_cache(current_user.id)
+    if cached_role:
+        user_role = cached_role
+    else:
+        user_role = current_user.role
+        set_user_role_cache(current_user.id, user_role)
+
     # Получаем все задачи для создания словаря номеров (без поиска)
     all_tasks_for_numbers = db.query(Task).filter(
         Task.owner_id == current_user.id
@@ -109,6 +117,8 @@ async def home(
         if days_since_reg > 0:
             current_user.trial_used = True
             db.commit()
+            # Обновляем кэш после изменения роли/статуса
+            set_user_role_cache(current_user.id, user_role)
     
     if can_use_calendar:
         # Определяем текущий месяц для календаря
@@ -242,6 +252,9 @@ def enable_2fa(
     current_user.is_2fa_enabled = True
     db.commit()
     
+    # Обновляем кэш (роль не изменилась, но можно обновить время жизни)
+    set_user_role_cache(current_user.id, current_user.role)
+
     return RedirectResponse(url='/profile?success=2fa_enabled', status_code=303)
 
 @router.post('/profile/disable-2fa')
@@ -255,5 +268,7 @@ def disable_2fa(
     
     current_user.is_2fa_enabled = False
     db.commit()
+    
+    set_user_role_cache(current_user.id, current_user.role)
 
     return RedirectResponse(url='/profile?success=2fa_disabled', status_code=303)

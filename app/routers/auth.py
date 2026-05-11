@@ -3,10 +3,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-import pyotp
 import random
 import requests
 
+from app.tasks import store_2fa_code, verify_2fa_code, redis_client
 from app.database import get_db, add_and_refresh
 from app.models import User
 from app.auth import (
@@ -17,7 +17,6 @@ from app.auth import (
 from app.templating import render_template
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-temp_2fa_codes = {} # временное хранилище для кодов (заместо Redis/БД)
 
 # Простая залушка
 def send_sms(phone: str, code: str) -> bool:
@@ -99,14 +98,9 @@ def login_page_submit(
     
     # Если включена 2FA
     if user.is_2fa_enabled and user.phone:
-        # Генерируем 6-значный код
         code = str(random.randint(100000, 999999))
-        temp_2fa_codes[user.id] = code
-
-        # Отправляем SMS
+        store_2fa_code(user.id, code, 300)
         send_sms(user.phone, code)
-
-        # Показываем страницу ввода кода 
         return render_template('2fa.mako', request=request, user_id=user.id)
     
     # Если 2FA не включена - сразу логиним
@@ -131,13 +125,14 @@ def verify_2fa(
     if not user:
         return render_template('login.mako', request=request, error='Пользователь не найден')
 
-    stored_code = temp_2fa_codes.get(user_id)
+    # Проверяем код через Redis (вместо словаря)
+    stored_code = redis_client.get(f'2fa:{user_id}')
     
     if not stored_code or stored_code != code:
         return render_template('2fa.mako', request=request, user_id=user.id, error='Неверный код подтверждения')
     
     # Код верный - удаляем из временного хранилища
-    del temp_2fa_codes[user_id]
+    redis_client.delete(f'2fa:{user_id}')
 
     acces_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

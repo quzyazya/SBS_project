@@ -16,7 +16,10 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     role = Column(String(20), default='user')  # f.Ex: (user, vip)
-    nackname_changed = Column(Boolean, deafault=False)
+    nickname_changed = Column(Boolean, default=False)
+
+    # VIP подписка
+    subscription_expires_at = Column(DateTime, nullable=True)
 
     # 2FA поля
     is_2fa_enabled = Column(Boolean, default=False)
