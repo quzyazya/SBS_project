@@ -12,6 +12,14 @@
         .progress-bar { transition: width 0.3s ease; }
         .task-done { text-decoration: line-through; opacity: 0.7; }
         .container { max-width: 800px; }
+
+        .bg-purple {
+            background-color: #9b59b6 !important;
+        }
+        .bg-purple-striped {
+            background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent) !important;
+            background-size: 1rem 1rem !important;
+        }
     </style>
 </head>
 <body>
@@ -45,3 +53,4 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

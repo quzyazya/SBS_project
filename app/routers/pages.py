@@ -1,17 +1,29 @@
 from datetime import datetime
 import json
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc, nulls_last
 from app.database import get_db
-from app.models import ArchivedTask, Task
+from app.models import ArchivedTask, Task, User
 from app.auth import get_current_user_from_cookie
+from app.redis_utils import (
+    store_verification_code, verify_verification_code, 
+    get_user_role_from_cache, set_user_role_cache,
+    store_phone_verification_code, verify_phone_code
+    )
 from app.templating import render_template
-from app.tasks import get_user_role_from_cache, set_user_role_cache
+
+import random
+from datetime import datetime, timedelta
+
+from app.sms_utils import send_verification_code
 
 router = APIRouter(tags=["Pages"])
+
+# Временное хранилище для кодов подтверждения (с Redis)
+
 
 
 @router.get("/")
@@ -92,8 +104,6 @@ async def home(
 
     # Глобальный прогресс = процент выполненных задач
     global_percent = (done_tasks / total_tasks * 100) if total_tasks > 0 else 0
-    
-    from datetime import datetime, timedelta
     
     overdue_tasks_count = 0
 
@@ -237,27 +247,107 @@ def profile_page(
         return render_template('login.mako', request=request, error='Пожалуйста, войдите в систему')
     return render_template('profile.mako', request=request, current_user=current_user)
 
-@router.post('/profile/enable-2fa')
-def enable_2fa(
+@router.post('/profile/change-username')
+def change_username(
     request: Request,
+    new_username: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie),
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # VIP могут менять никнейм неограниченное количество раз
+    if current_user.role != 'vip':
+        if current_user.nickname_changed:
+            return RedirectResponse(url='/profile?error=nickname_already_changed', status_code=303)
+    
+    # Проверка: никнейм не занят
+    existing = db.query(User).filter(User.username == new_username).first()
+    if existing and existing.id != current_user.id:
+        return RedirectResponse(url='/profile?error=nickname_taken', status_code=303)
+    
+    # Меняем никнейм
+    current_user.username = new_username
+
+    # Отмечаем, что никнейм менялся (только для Free)
+    if current_user.role != 'vip':
+        current_user.nickname_changed = True
+    
+    db.commit()
+    set_user_role_cache(current_user.id, current_user.role)
+
+    return RedirectResponse('/profile?success=nickname_changed', status_code=303)
+
+@router.post('/profile/add-phone')
+def add_phone(
+    request: Request,
+    phone: str = Form(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_from_cookie)
 ):
     if not current_user:
         return RedirectResponse(url='/auth/login-page', status_code=303)
     
+    if not phone or len(phone) < 10:
+        return RedirectResponse(url='/profile?error=invalid_phone', status_code=303)
+    
+    current_user.phone = phone
+    db.commit()
+
+    return RedirectResponse(url='/profile?success=phone_added', status_code=303)
+
+'''@router.post('/profile/enable-2fa-request')
+def enable_2fa_request(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+
     if not current_user.phone:
-        return RedirectResponse(url='/profile?error=no_phone', status_code=303)
+        return RedirectResponse(url='/profile?error=no_phone_first', status_code=303)
+    
+    code = str(random.randint(100000, 999999))
+    store_verification_code(current_user.id, code, 300)
+
+    print(f"📱 SMS на {current_user.phone}: Ваш код подтверждения для включения 2FA: {code}")
+
+    return RedirectResponse(url='/profile/verify-2fa-page', status_code=303)'''
+
+@router.get('/profile/verify-2fa-page')
+def verify_2fa_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return render_template('login.mako', request=request, error='Пожалуйста, войдите в систему')
+    return render_template('verify_2fa.mako', request=request, user_id=current_user.id)
+
+@router.post('/profile/verify-2fa')
+def verify_2fa(
+    request: Request,
+    code: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    if not verify_verification_code(current_user.id, code):
+        return RedirectResponse(url='/profile/verify-2fa-page?error=invalid_code', status_code=303)
     
     current_user.is_2fa_enabled = True
     db.commit()
     
-    # Обновляем кэш (роль не изменилась, но можно обновить время жизни)
     set_user_role_cache(current_user.id, current_user.role)
-
+    
     return RedirectResponse(url='/profile?success=2fa_enabled', status_code=303)
 
-@router.post('/profile/disable-2fa')
+
+'''@router.post('/profile/disable-2fa')
 def disable_2fa(
     request: Request,
     db: Session = Depends(get_db),
@@ -271,4 +361,101 @@ def disable_2fa(
     
     set_user_role_cache(current_user.id, current_user.role)
 
-    return RedirectResponse(url='/profile?success=2fa_disabled', status_code=303)
+    return RedirectResponse(url='/profile?success=2fa_disabled', status_code=303)'''
+
+@router.post('/profile/send-phone-code')
+def send_phone_code(
+    request: Request,
+    phone: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    # Отправляет код подтверждения на указанный телефон
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # Простая валидация телефона
+    if not phone or len(phone) < 10:
+        return RedirectResponse(url='/profile?error=invalid_phone', status_code=303)
+    
+    # Генерируем код
+    code = str(random.randint(100000, 999999))
+
+    # Сохраняем код в Redis (связываем с номером телефона)
+    store_phone_verification_code(phone, code, 300)
+
+    # Отправляем SMS
+    if send_verification_code(phone, code):
+        # Временно сохраняем телефон в сессии/cookie для следующего шага
+        response = RedirectResponse(url='/profile/verify-phone-page', status_code=303)
+        response.set_cookie(key='pending_phone', value=phone, httponly=True, max_age=300)
+        return response
+    else:
+        return RedirectResponse(url='/profile?error=sms_failed', status_code=303)
+    
+@router.get('/profile/verify-phone-page')
+def verify_phone_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    # Страница ввода кода подтверждения телефона
+    if not current_user:
+        return render_template('login.mako', request=request, error='Пожалуйста войдите в систему')
+    
+    # Получаем телефон из cookie
+    pending_phone = request.cookies.get('pending_phone')
+    if not pending_phone:
+        return RedirectResponse(url='/profile?error=no_pending_phone', status_code=303)
+    
+    return render_template('verify_phone.mako', request=request, phone=pending_phone)
+
+@router.post('/profile/verify-phone')
+def verify_phone(
+    request: Request,
+    code: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    # Подтверждает код и сохраняет телефон
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # Получаем телефон из cookie
+    pending_phone = request.cookies.get('pending_phone')
+    if not pending_phone:
+        return RedirectResponse(url='/profile?error=no_pending_phone', status_code=303)
+    
+    # Проверяем код
+    if not verify_phone_code(pending_phone, code):
+        return RedirectResponse(url='/profile/verify-phone-page?error=invalid_code', status_code=303)
+    
+    # Код верный -> сохраняем телефон
+    current_user.phone = pending_phone
+    db.commit()
+
+    # Удаяляем временную cookie
+    response = RedirectResponse(url='/profile?succes-phone_added', status_code=303)
+    response.delete_cookie('pending_phone')
+
+    return response
+
+# Удаление номера телефона 
+
+@router.post('/profile/remove-phone')
+def remove_phone(
+    request: Request,
+    db: Session = Depends(get_db), 
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # Если 2FA включена, сначала нужно ее отключить
+    if current_user.is_2fa_enabled:
+        return RedirectResponse(url='/profile?error=disable_2fa_first', status_code=303)
+    
+    current_user.phone = None
+    db.commit()
+
+    return RedirectResponse(url='/profile?success=phone_removed', status_code=303)

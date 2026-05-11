@@ -6,7 +6,8 @@ from datetime import timedelta
 import random
 import requests
 
-from app.tasks import store_2fa_code, verify_2fa_code, redis_client
+from app.redis_utils import store_2fa_code, verify_2fa_code, redis_client, store_phone_verification_code, verify_phone_code
+
 from app.database import get_db, add_and_refresh
 from app.models import User
 from app.auth import (
@@ -14,6 +15,7 @@ from app.auth import (
     get_current_user, get_user_by_email, authenticate_user,  
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
+from app.sms_utils import send_verification_code
 from app.templating import render_template
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -36,32 +38,106 @@ def register_page_submit(
     request: Request,
     email: str = Form(...),
     username: str = Form(...),
+    phone: str = Form(None),
+    password: str = Form(...),
+    action: str = Form('register'),
+    db: Session = Depends(get_db)
+):
+    # Если телефон указан и это первый шаг -> отправляем код
+    if phone and len(phone) >= 10 and action == 'register':
+        # Проверяем, не занят ли email или никнейм
+        existing = db.query(User).filter(
+            (User.email == email) | (User.username == username)
+        ).first()
+        if existing:
+            return render_template('register.mako', request=request, error='Email или никнейм уже занят')
+
+        # Сохраняем данные в сессии (временное хранилище)
+        request.session['pending_registration'] = {
+            'email': email,
+            'username': username,
+            'phone': phone,
+            'password': password
+        }
+
+        # Генерируем и отправляем код
+        code = str(random.randint(100000, 999999))
+        store_phone_verification_code(phone, code, 300)
+        send_verification_code(phone, code)
+
+        # Перенаправляем на страницу подтверждения
+        return RedirectResponse(url='/auth/verify-registration-page', status_code=303)
+
+    # Если телефон не указан -> сразу регистрируем
+    if not phone:
+        existing_user = db.query(User).filter(
+            (User.email == email) | (User.username == username)
+        ).first()
+        if existing_user:
+            return render_template('register.mako', request=request, error='Email или никнейм уже занят')
+
+        new_user = User(
+            email=email,
+            username=username,
+            phone=phone,
+            hashed_password=get_password_hash(password),
+            role='user'   # по умолчанию обычный пользователь
+        )
+        add_and_refresh(db, new_user)
+        return RedirectResponse(url="/auth/login-page", status_code=303)
+
+@router.get('/verify-registration-page')
+def verify_registration_page(request: Request):
+    # Страница ввода кода подтверждения
+    pending = request.session.get('pending_registration')
+    if not pending:
+        return RedirectResponse(url='/auth/register-page', status_code=303)
+    
+    return render_template('verify_registration.mako',
+                           request=request,
+                           email=pending['email'],
+                           username=pending['username'],
+                           phone=pending['phone'],
+                           password=pending['password']
+    )
+
+@router.post('/verify-registration')
+def verify_registration(
+    request: Request,
+    code: str = Form(...),
+    email: str = Form(...),
+    username: str = Form(...),
     phone: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Обработка регистрации из HTML формы"""
-    existing_user = get_user_by_email(db, email)
-    if existing_user:
-        return render_template("register.mako", request=request, error="Email уже зарегистрирован")
+    if not verify_phone_code(phone, code):
+        return render_template('verify_registration.mako',
+                               request=request,
+                               error='Неверный код подтверждения',
+                               email=email, username=username, phone=phone, password=password
+        )
     
-    existing_email = db.query(User).filter(User.email == email).first()
-    if existing_email:
-        return render_template('register.mako', request=request, error='Email уже зарегистрирован')
+    # Регистрируем пользователя
+    existing = db.query(User).filter(
+        (User.email == email) | (User.username == username)
+    ).first()
+    if existing:
+        return render_template('register.mako', request=request, error='Email или никнейм уже занят')
     
-    existing_username = db.query(User).filter(User.username == username).first()
-    if existing_username:
-        return render_template('register.mako', request=request, error='Это имя уже занято')
-
     new_user = User(
         email=email,
         username=username,
         phone=phone,
         hashed_password=get_password_hash(password),
-        role='user'   # по умолчанию обычный пользователь
+        role='user'
     )
     add_and_refresh(db, new_user)
-    return RedirectResponse(url="/auth/login-page", status_code=303)
+
+    # Очищаем сессию
+    request.session.pop('pending_registration', None)
+
+    return RedirectResponse(url='/auth/login-page', status_code=303)
 
 @router.get("/login-page")
 def login_page(request: Request):
@@ -97,7 +173,7 @@ def login_page_submit(
         return render_template("login.mako", request=request, error="Неверный email, имя пользователя или пароль")
     
     # Если включена 2FA
-    if user.is_2fa_enabled and user.phone:
+    if user.phone:
         code = str(random.randint(100000, 999999))
         store_2fa_code(user.id, code, 300)
         send_sms(user.phone, code)
@@ -124,15 +200,10 @@ def verify_2fa(
 
     if not user:
         return render_template('login.mako', request=request, error='Пользователь не найден')
-
-    # Проверяем код через Redis (вместо словаря)
-    stored_code = redis_client.get(f'2fa:{user_id}')
     
-    if not stored_code or stored_code != code:
+    if not verify_2fa_code(user.id, code):
         return render_template('2fa.mako', request=request, user_id=user.id, error='Неверный код подтверждения')
     
-    # Код верный - удаляем из временного хранилища
-    redis_client.delete(f'2fa:{user_id}')
 
     acces_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(

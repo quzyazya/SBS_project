@@ -17,6 +17,7 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     role = Column(String(20), default='user')  # f.Ex: (user, vip)
     nickname_changed = Column(Boolean, default=False)
+    trial_used = Column(Boolean, default=False)
 
     # VIP подписка
     subscription_expires_at = Column(DateTime, nullable=True)

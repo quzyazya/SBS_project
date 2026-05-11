@@ -4,7 +4,7 @@
 <!-- КАЛЕНДАРЬ (плавающий справа) -->
 <div style="position: fixed; right: 20px; top: 100px; width: 320px; z-index: 1000;">
     <div class="card shadow-sm">
-        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center" style='background-color: #e83e8c !important;'>
+        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center" style='background-color: #8b24aa !important;'>
             <h6 class="mb-0">🗓️ Календарь дедлайнов</h6>
             <button id="searchToggleBtn" style="background: none; border: none; color: white; cursor: pointer;">🔍</button>
         </div>
@@ -66,7 +66,7 @@
         <div class="card-body">
             <h5 class="card-title text-center mb-3">🎯 Общий прогресс</h5>
             <div class="progress" style="height: 35px; border-radius: 20px;">
-                <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" style="width: ${stats['percent']}%">
+                <div class="progress-bar bg-purple bg-purple-striped progress-bar-animated" style="width: ${stats['percent']}%">
                     ${stats['percent']}%
                 </div>
             </div>
@@ -237,7 +237,7 @@
                             <span class="badge bg-${task['deadline_color']}">●</span>
                             <strong class="flex-grow-1">${task['title']}</strong>
                             <div class="progress" style="width: 80px; height: 8px;">
-                                <div class="progress-bar bg-success" style="width: ${task['progress_percent']}%"></div>
+                                <div class="progress-bar bg-purple" style="width: ${task['progress_percent']}%"></div>
                             </div>
                             <span class="small text-muted">${task['progress_percent']}%</span>
                         </div>

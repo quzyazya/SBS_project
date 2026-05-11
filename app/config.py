@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # REDIS
     REDIS_URL: str = 'redis://localhost:6379/0'
     
+    SMSC_LOGIN: str = ""
+    SMSC_PASSWORD: str = ""
+
     # для синхронных операций (Alembic, psycopg2)
     @property
     def DATABASE_URL(self) -> str:

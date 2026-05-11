@@ -9,7 +9,9 @@ import redis
 import json
 import os
 
-logger =logging.getLogger(__name__)
+from app.redis_utils import cleanup_expired_codes
+
+logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 redis_client = redis.from_url(REDIS_URL)
 
@@ -28,10 +30,9 @@ def check_and_downgrade_expired_vip():
                 # Понижаем статус
                 user.role = 'user'
                 user.subscription_expires_at = None
-                logger.info(f'user:{user.id}', 'role', 'user')
+                logger.info(f"📉 User {user.email} downgraded from VIP")
 
-                # Сохраняем в Redis для быстрого доступа (кэш)
-                redis_client.hset(f'user:{user.id}', 'role', 'user') 
+                # Обновляем кэш в Redis
 
             db.commit()
             return {'downgraded': len(expired_users)}
@@ -47,11 +48,7 @@ def cleanup_expired_2fa_codes():
     # Вместо словаря temp_2fa_codes теперь Redis с TTL
     # Коды сами истекают через 5 минут, эта задача - для страховки            
 
-    pattern = '2fa:*'
-    for key in redis_client.scan_iter(match=pattern):
-        if redis_client.ttl(key) <= 0:
-            redis_client.delete(key)
-    
+    cleaned = cleanup_expired_codes('2fa:*')
     return {'cleaned': True}
 
 def store_2fa_code(user_id: int, code: str, expires_seconds: int = 300):

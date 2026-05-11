@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 from app.routers import auth, tasks, pages, payments
 from celery_app import celery_app
@@ -12,6 +13,8 @@ app = FastAPI(
     description = 'Task tracker with progress bar + JWT auth',
     debug = settings.DEBUG
 )
+
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # Подключаем статистические файлы (CSS)
 app.mount('/static', StaticFiles(directory = 'app/static'), name = 'static')

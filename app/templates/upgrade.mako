@@ -45,6 +45,7 @@
                         <ul class="list-unstyled text-start">
                             <li>✓ 📌 Неограниченные закрепления</li>
                             <li>✓ 📅 Календарь задач с дедлайнами</li>
+                            <li>✓ ♾️ Неограниченное количество никнеймов</li>
                             <li>✓ 🔥 Экономия 50%</li>
                         </ul>
                         <form action="/payments/create-payment" method="post">
@@ -71,6 +72,7 @@
                         <ul class="list-unstyled text-start">
                             <li>✓ 📌 Неограниченные закрепления</li>
                             <li>✓ 📅 Календарь задач с дедлайнами</li>
+                            <li>✓ ♾️ Неограниченное количество никнеймов</li>
                             <li>✓ 🔥 Экономия 57%</li>
                         </ul>
                         <form action="/payments/create-payment" method="post">
@@ -98,6 +100,7 @@
                             <tr><td class="text-start">Закрепление задач (📌)</td><td>⚠️ До 3</td><td>✔️ Безлимит</td></tr>
                             <tr><td class="text-start">Календарь задач</td><td>❌</td><td>✔️ Доступен</td></tr>
                             <tr><td class="text-start">Приоритетная поддержка</td><td>❌</td><td>✔️</td></tr>
+                            <tr><td class="text-start">Смена никнейма</td><td>😢 1 раз</td><td> ♾️</td></tr>
                         </tbody>
                     </table>
                 </div>
