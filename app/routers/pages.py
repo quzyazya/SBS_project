@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc, nulls_last
 from app.database import get_db
 from app.models import ArchivedTask, Task, User
+from app.quotes import get_quote_of_the_day
 from app.auth import get_current_user_from_cookie
 from app.redis_utils import (
     store_verification_code, verify_verification_code, 
@@ -38,6 +39,9 @@ async def home(
     if not current_user:
         return render_template("login.mako", request=request, error="Пожалуйста, войдите в систему")
     
+    # Получаем цитату дня
+    quote = get_quote_of_the_day()
+
     cached_role = get_user_role_from_cache(current_user.id)
     if cached_role:
         user_role = cached_role
@@ -215,7 +219,8 @@ async def home(
         calendar_month=calendar_month if can_use_calendar else datetime.utcnow().month,
         calendar_data=calendar_data,
         can_use_calendar=can_use_calendar,
-        days_left_trial=(7 - days_since_reg) if days_since_reg <= 7 else 0
+        days_left_trial=(7 - days_since_reg) if days_since_reg <= 7 else 0,
+        quote=quote
     )
 
 @router.get('/create-task')

@@ -59,8 +59,25 @@
 </div>
 
 <!-- ОСНОВНОЙ БЛОК -->
-<div class="container" style="max-width: 1000px; margin: 0 auto;">
+<div class="container" style="max-width: 1000px; margin: 0 auto; position: relative;">
     
+    <!-- БЛОК С ЦИТАТОЙ -->
+    <div class="quote-sidebar" style="position: absolute; left: -340px; top: 0; width: 320px;">
+        <div class="card shadow-lg" style="border: none; background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); border-radius: 20px;">
+            <div class="card-header text-white text-center" style="background: rgba(0,0,0,0.1); border-bottom: 1px solid rgba(255,255,255,0.2); border-radius: 20px 20px 0 0;">
+                <h5 class="mb-0">✨ Цитата дня ✨</h5>
+            </div>
+            <div class="card-body p-4">
+                <p class="mb-3 text-white" style="font-style: italic; font-size: 1.1rem; line-height: 1.6;">
+                    «${quote['text']}»
+                </p>
+                <p class="text-end mb-0" style="font-family: 'Georgia', 'Playfair Display', serif; font-size: 1rem; color: #f0e6ff;">
+                    — ${quote['author']}
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- Глобальный прогресс -->
     <div class="card mb-4">
         <div class="card-body">
