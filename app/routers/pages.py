@@ -240,7 +240,29 @@ def create_task_page(
 @router.get('/upgrade-page')
 def upgrade(request: Request):
     # Страница выбора VIP подписки
-    return render_template('upgrade.mako', request=request)
+    return render_template('coming_soon.mako', request=request)
+
+@router.post('/activate-trial-vip')
+def activate_trial_vip(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # Обновляем роль до VIP
+    current_user.role = 'vip'
+    db.commit()
+
+    # Обновляем кэш в Redis
+    set_user_role_cache(current_user.id, 'vip')
+
+    return RedirectResponse(url='/vip-success', status_code=303)
+
+@router.get('/vip-success')
+def vip_success(request:Request):
+    return render_template('vip_success.mako', request=request)
 
 @router.get('/profile')
 def profile_page(
