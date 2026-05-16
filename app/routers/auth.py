@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import datetime, timedelta
 import random
 import requests
+from app.rate_limit import limiter
 
-from app.redis_utils import store_2fa_code, verify_2fa_code, redis_client, store_phone_verification_code, verify_phone_code
+from app.redis_utils import delete_user_role_cache, set_user_role_cache, store_2fa_code, verify_2fa_code, redis_client, store_phone_verification_code, verify_phone_code
 
 from app.database import get_db, add_and_refresh
 from app.models import User
@@ -17,6 +18,8 @@ from app.auth import (
 )
 from app.sms_utils import send_verification_code
 from app.templating import render_template
+from app.email_utils import send_verification_email, send_password_reset_email, send_welcome_email
+import uuid
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -34,7 +37,8 @@ def register_page(request: Request):
 
 
 @router.post("/register-page")
-def register_page_submit(
+@limiter.limit('3/minute')
+async def register_page_submit(
     request: Request,
     email: str = Form(...),
     username: str = Form(...),
@@ -46,10 +50,10 @@ def register_page_submit(
     # Если телефон указан и это первый шаг -> отправляем код
     if phone and len(phone) >= 10 and action == 'register':
         # Проверяем, не занят ли email или никнейм
-        existing = db.query(User).filter(
+        existing_user = db.query(User).filter(
             (User.email == email) | (User.username == username)
         ).first()
-        if existing:
+        if existing_user:
             return render_template('register.mako', request=request, error='Email или никнейм уже занят')
 
         # Сохраняем данные в сессии (временное хранилище)
@@ -76,15 +80,30 @@ def register_page_submit(
         if existing_user:
             return render_template('register.mako', request=request, error='Email или никнейм уже занят')
 
+        # Генерируем токен подтверждения email
+        verification_token = str(uuid.uuid4())
+
         new_user = User(
             email=email,
             username=username,
             phone=phone,
             hashed_password=get_password_hash(password),
-            role='user'   # по умолчанию обычный пользователь
+            role='user',   # по умолчанию обычный пользователь
+            is_email_verified=False,
+            email_verification_token=verification_token
         )
         add_and_refresh(db, new_user)
-        return RedirectResponse(url="/auth/login-page", status_code=303)
+
+        # Отправляем email с подтверждением 
+        await send_verification_email(email, username, verification_token)
+
+        # Показываем страницу успеха
+        return render_template('register_success.mako', request=request, email=email)
+    
+    # Если телефон указан, но уже есть код в сессии (шаг 2 - подтверждеине)
+    # Этот блок обрабатывается отдельным эндпоинтом /auth/verify-registration
+    return RedirectResponse(url='/auth/register-page', status_code=303)
+        
 
 @router.get('/verify-registration-page')
 def verify_registration_page(request: Request):
@@ -144,18 +163,77 @@ def login_page(request: Request):
     """Страница входа HTML"""
     return render_template("login.mako", request=request, error=None)
 
-@router.post('/upgrade-to-vip')
-def upgrade_to_vip(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get('/forgot-password')
+def forgot_password_page(request: Request):
+    # Страница запроса восстановления пароля
+    return render_template('forgot_password.mako', request=request, error=None)
+
+@router.post('/forgot-password')
+@limiter.limit('3/hour')
+async def forgot_password(
+    request: Request,
+    email: str = Form(...),
+    db: Session = Depends(get_db)
 ):
-    # Повышает роль пользователя до VIP
-    current_user.role = 'vip'
+    # Отправка ссылки для восстановления пароля
+    user = db.query(User).filter(User.email == email).first()
+
+    # Проверка подтверждения email
+    if user and not user.is_email_verified:
+        # Email не подтвержден - письмо не отправится
+        return render_template('forgot_password.mako', request=request, error='Сначала подтвердите email. Проверьте почту.')
+
+    # Для безопасности не сообщаем, существует ли email
+    if user:
+        # Генерируем токен
+        token = str(uuid.uuid4())
+        user.reset_password_token = token
+        user.reset_password_expires = datetime.utcnow() + timedelta(hours=1)
+
+        # Отправляем email
+        await send_password_reset_email(email, user.username, token)
+
+    return render_template('forgot_password_sent.mako', request=request, email=email)
+
+@router.get('/reset-password')
+def reset_password_page(request: Request, token: str, db: Session = Depends(get_db)):
+    # Страница ввода нового пароля
+    user = db.query(User).filter(
+        User.reset_password_token == token,
+        User.reset_password_expires > datetime.utcnow()
+    ).first()
+
+    if not user:
+        return render_template('login.mako', request=request, error='Ссылка недействительная или истекла')
+    
+    return render_template('reset_password.mako', request=request, token=token)
+
+@router.post('/reset-password')
+def reset_password(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    # Сохранение нового пароля
+    user = db.query(User).filter(
+        User.reset_password_token == token,
+        User.reset_password_expires > datetime.utcnow()
+    ).first()
+
+    if not user:
+        return render_template('login.mako', request=request, error='Ссылка недействительна или истекла')
+
+    user.hashed_password = get_password_hash(password)
+    user.reset_password_token = None
+    user.reset_password_expires = None
     db.commit()
-    return {'message': 'Поздравляем, вы теперь VIP пользователь! Вам доступно неограниченное количество задач!'}
+
+    return RedirectResponse(url='/auth/login-page?reset=success', status_code=303)
 
 @router.post("/login-page")
-def login_page_submit(
+@limiter.limit('5/minute')
+async def login_page_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
@@ -172,9 +250,20 @@ def login_page_submit(
     if not user or not verify_password(password, user.hashed_password):
         return render_template("login.mako", request=request, error="Неверный email, имя пользователя или пароль")
     
+    # Проверка
+    # if not user.is_email_verified:
+    #     return render_template('login.mako', request=request, error='Подтвердите email перед входим. Проверьте почту.')
+
+    # Отправляем приветственное письмо при первом входе 
+    # if not hasattr(user, 'welcome_sent') or not user.welcome_sent:
+    #     await send_welcome_email(user.email, user.username)
+    #     user.welcome_sent = True
+    #     db.commit()
+
     # Если включена 2FA
     if user.phone:
-        code = str(random.randint(100000, 999999))
+        # code = str(random.randint(100000, 999999))    пока не подключены SMS нужно убрать
+        code = '123456'
         store_2fa_code(user.id, code, 300)
         send_sms(user.phone, code)
         return render_template('2fa.mako', request=request, user_id=user.id)
@@ -182,11 +271,19 @@ def login_page_submit(
     # Если 2FA не включена - сразу логиним
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user.email, 'role': user.role}, expires_delta=access_token_expires
     )
     
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(key="access_token", value=access_token, httponly=True)
+
+    # Если это первый вход (welcome не отправляли и не показывали страницу)
+    if not hasattr(user, 'welcome_shown') or not user.welcome_shown:
+        user.welcome_shown = True
+        db.commit()
+        # Перенаправляем на страницу-приветствие
+        return RedirectResponse(url='/welcome', status_code=303)
+
     return response
 
 @router.post('/verify-2fa')
@@ -207,12 +304,37 @@ def verify_2fa(
 
     acces_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={'sub': user.email}, expires_delta=acces_token_expires
+        data={'sub': user.email, 'role': user.role}, expires_delta=acces_token_expires
     )
 
     response = RedirectResponse(url='/', status_code=303)
     response.set_cookie(key='access_token', value=access_token, httponly=True)
     return response
+
+@router.get('/verify-email')
+async def verify_email(request: Request, token: str, db: Session = Depends(get_db)):
+    # Подтверждение email при регистрации
+    user = db.query(User).filter(User.email_verification_token == token).first()
+
+    if not user:
+        return render_template('login.mako', request=request, error='Недействительная ссылка подтверждения')
+    
+    user.is_email_verified = True
+    user.email_verification_token = None
+    db.commit()
+
+    # Обновляем кэш роли
+    delete_user_role_cache(user.id)
+    set_user_role_cache(user.id, user.role)
+
+    # Отправляем приветственное письмо (только если еще не отправляли)
+    if not user.welcome_sent:
+        await send_welcome_email(user.email, user.username)
+        user.welcome_sent = True
+        db.commit()
+
+    # Показываем страницу успеха с кнопкой "Продолжить"
+    return render_template('email_verified_success.mako', request=request)
 
 @router.get("/logout")
 def logout():

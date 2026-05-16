@@ -48,6 +48,11 @@
             % if calendar_data:
                 <%namespace name="calendar" file="calendar.mako" />
                 ${calendar.render_calendar(calendar_data, current_user, calendar_year, calendar_month)}
+            % elif can_use_calendar:
+                <!-- VIP, но нет задач с дедлайнами -->
+                <div class='text-center text-muted p-3'>
+                    📅 Календарь доступен, но у вас нет задач с дедлайнами
+                </div>
             % else:
                 <div class='text-center text-muted p-3'>
                     🔒 Календарь доступен только VIP пользователям

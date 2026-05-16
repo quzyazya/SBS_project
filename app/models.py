@@ -19,6 +19,10 @@ class User(Base):
     nickname_changed = Column(Boolean, default=False)
     trial_used = Column(Boolean, default=False)
 
+    # Приветственное письмо и страница
+    welcome_sent = Column(Boolean, default=False)
+    welcome_shown = Column(Boolean, default=False)
+
     # VIP подписка
     subscription_expires_at = Column(DateTime, nullable=True)
 
@@ -26,6 +30,14 @@ class User(Base):
     is_2fa_enabled = Column(Boolean, default=False)
     otp_secret = Column(String(100), nullable=True)
     tasks = relationship('Task', back_populates='owner', cascade='all, delete-orphan')
+
+    # Сброс пароля
+    reset_password_token = Column(String(100), nullable=True)
+    reset_password_expires = Column(DateTime, nullable=True)
+
+    # Верификация email
+    is_email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(100), nullable=True)
 
 
 class Task(Base):

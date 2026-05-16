@@ -12,7 +12,7 @@
                     Но вы можете получить VIP статус бесплатно!
                 </p>
                 
-                <form method="post" action="/activate-trial-vip">
+                <form method="post" action="/activate-paid-vip">
                     <button type="submit" class="btn btn-light btn-lg px-5" style="background: #fff; color: #9b59b6; border-radius: 50px; font-weight: bold;">
                         🎁 Временно подключить VIP статус
                     </button>

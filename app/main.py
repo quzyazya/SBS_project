@@ -6,6 +6,9 @@ from app.routers import auth, tasks, pages, payments
 from celery_app import celery_app
 from celery.schedules import crontab
 import app.tasks
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.rate_limit import limiter
 
 # Создаем приложение 
 app = FastAPI(
@@ -14,6 +17,11 @@ app = FastAPI(
     debug = settings.DEBUG
 )
 
+# Подключение ограничения запросов (защита от DDoS, брутфорса)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Подключение Middleware (для транзакций)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # Подключаем статистические файлы (CSS)

@@ -11,6 +11,7 @@ from app.dependencies import can_create_task, can_star_task
 from app.models import User, Task, CheckPoint, ArchivedTask
 from app.auth import get_current_user, decode_access_token
 from app.templating import render_template
+from app.rate_limit import limiter
 
 router = APIRouter(prefix="/api", tags=["Tasks API"])
 
@@ -172,6 +173,7 @@ def api_delete_checkpoint(checkpoint_id: int, db: Session = Depends(get_db), cur
 # ========== HTML ФОРМЫ (фронтенд) ==========
 
 @router.post("/tasks-form")
+@limiter.limit('30/minute')
 def create_task_frontend(
     title: str = Form(...),
     content: str = Form(None),
@@ -329,6 +331,7 @@ def star_task_frontend(
 
 
 @router.post('/tasks/{task_id}/checkpoints-form')
+@limiter.limit('60/minute')
 def create_checkpoint_form(
     task_id: int, 
     title: str = Form(...), 

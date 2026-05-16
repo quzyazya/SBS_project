@@ -99,10 +99,16 @@ async def get_current_user_from_cookie(request: Request, db: Session = Depends(g
         return None
     
     email = payload.get("sub")
+    role_from_token = payload.get('role')
     if not email:
         return None
     
     user = get_user_by_email(db, email)
+
+    # Если роль в токене есть - используем ее
+    if user and role_from_token:
+        user.role = role_from_token
+
     return user
 
 def get_user_from_token(db: Session, request: Request):

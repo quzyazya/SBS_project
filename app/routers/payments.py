@@ -10,11 +10,63 @@ from yookassa import Configuration, Payment
 from app.config import settings
 from app.database import get_db
 from app.models import User
-from app.auth import get_current_user
+from app.auth import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_current_user
+from app.redis_utils import delete_user_role_cache, set_user_role_cache, redis_client
 # from app.templating import render_template
 
 router = APIRouter(prefix='/payments', tags=['Payments'])
 
+
+@router.post('/create-payment')
+async def create_payment(
+    interval: str = Form(...),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    # Получаем пользователя из cookie
+    from app.auth import get_current_user_from_cookie
+    current_user = await get_current_user_from_cookie(request, db)
+
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    # Определяем срок подписки
+    if interval == 'month':
+        current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=30)
+    else:
+        current_user.subscription_expires_at = datetime.utcnow() + timedelta(days=365)
+
+    # Даем VIP статус
+    current_user.role = 'vip'
+    db.commit()
+
+    # Обновляем кэш в Redis
+    delete_user_role_cache(current_user.id)      # Сначала удаляем старый кэш
+    set_user_role_cache(current_user.id, 'vip')  # Устанавливаем новый
+
+    # Создаем новый токен с обновленной ролью
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    new_access_token = create_access_token(
+        data={'sub': current_user.email, 'role': 'vip'}, expires_delta=access_token_expires
+    )
+
+    # Перенаправляем на страницу успеха (уже с новым токеном)
+
+    response = RedirectResponse(url='/coming-soon', status_code=303)
+    response.set_cookie(key='pending_vip_interval', value=interval, httponly=True, max_age=3600)
+
+    return response
+
+@ router.get('/success')
+async def payment_succes():
+    return RedirectResponse(url='/vip-success', status_code=303)
+
+@router.get('/cancel')
+async def payment_cancel():
+    return RedirectResponse(url='/upgrade-page?canceled=true', status_code=303)
+
+# Будет использоваться при реальной оплате, а пока все бесплатно
+'''
 # Настраиваем ЮKassa с ключами из .env
 Configuration.configure(settings.YOOKASSA_SHOP_ID, settings.YOOKASSA_SECRET_KEY)
 
@@ -130,26 +182,4 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
         }, status_code=400) 
 
     return JSONResponse(content={'status': 'ok'})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    '''
