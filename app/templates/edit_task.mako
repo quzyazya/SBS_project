@@ -38,8 +38,8 @@
                 <!-- Форма добавления нового пункта -->
                 <form method='post' action='/api/tasks/${task.id}/checkpoint-form' class='mb-3'>
                     <div class='input-group input-group-sm'>
-                        <input type='text' nmae='title' class='form-control' placeholder='Новый пункт...' required>
-                        <buttno class='btn btn-outline-primary' type='submit'>+ Добавить пункт</button>
+                        <input type='text' name='title' class='form-control' placeholder='Новый пункт...' required>
+                        <button class='btn btn-outline-primary' type='submit'>+ Добавить пункт</button>
                     </div>
                 </form>
 

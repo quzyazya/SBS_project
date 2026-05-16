@@ -87,6 +87,17 @@
                 <h5>🔒 Смена пароля</h5>
                 <a href='/profile/change-password' class='btn btn-outline-warning btn sm'>Сменить пароль</a>
 
+                <!-- ТЕМНАЯ ТЕМА -->
+                <h5>🌙 Оформление</h5>
+                <form method='post' action='/profile/toggle-theme' class='mt-2'>
+                    <button type='submit' class="btn ${'btn-dark' if current_user.dark_mode else 'btn-outline-secondary'}">
+                        % if current_user.dark_mode:
+                            ☀️ Светлая тема
+                        % else:
+                            🌙 Тёмная тема
+                        % endif
+                    </button>
+                </form>        
                 <hr>
 
             </div>

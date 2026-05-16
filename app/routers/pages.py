@@ -561,6 +561,7 @@ def remove_phone(
     return RedirectResponse(url='/profile?success=phone_removed', status_code=303)
 
 @router.post('/profile/send-verification-email')
+@limiter.limit('3/minute')
 async def send_verification_email_page(
     request: Request,
     db: Session = Depends(get_db),
@@ -584,7 +585,7 @@ async def send_verification_email_page(
 
     # Передаем время отправки в URL
     send_time = datetime.utcnow().isoformat()
-    return RedirectResponse(url='/profile/email-verification-pending?send_time={send_time}', status_code=303)
+    return RedirectResponse(url=f'/profile/email-verification-pending?send_time={send_time}', status_code=303)
 
 @router.get('/profile/email-verification-pending')
 def email_verification_pending(
@@ -601,6 +602,7 @@ def email_verification_pending(
     return render_template('email_verification_pending.mako', request=request, email=current_user.email)
 
 @router.post('/profile/resend-verification-email')
+@limiter.limit('3/minute')
 async def resend_verification_email(
     request = Request,
     db: Session = Depends(get_db),
@@ -621,9 +623,10 @@ async def resend_verification_email(
     await send_verification_email(current_user.email, current_user.username, verification_token)
 
     send_time = datetime.utcnow().isoformat()
-    return RedirectResponse(url='/profile/email-verification-pending?send_time={send_time}', status_code=303)
+    return RedirectResponse(url=f'/profile/email-verification-pending?send_time={send_time}', status_code=303)
 
 @router.post('/activate-trial-vip-temporary')
+@limiter.limit('3/hour')
 def activate_trial_vip_temporary(
     request: Request,
     db: Session = Depends(get_db),
@@ -666,6 +669,7 @@ def coming_soon_page(
     return render_template('coming_soon.mako', request=request)
 
 @router.post('/activate-paid-vip')
+@limiter.limit('3/hour')
 def activate_paid_vip(
     request: Request,
     db: Session = Depends(get_db),
@@ -720,3 +724,17 @@ def health_check(db: Session = Depends(get_db)):
         'redis': 'ok' if redis_client.ping() else 'error',
         'version': '1.0.0'
     }
+
+@router.post('/profile/toggle-theme')
+def toggle_theme(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_from_cookie)
+):
+    if not current_user:
+        return RedirectResponse(url='/auth/login-page', status_code=303)
+    
+    current_user.dark_mode = not current_user.dark_mode
+    db.commit()
+
+    return RedirectResponse(url='/profile', status_code=303)

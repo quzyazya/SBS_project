@@ -121,6 +121,7 @@ def verify_registration_page(request: Request):
     )
 
 @router.post('/verify-registration')
+@limiter.limit('5/minute')
 def verify_registration(
     request: Request,
     code: str = Form(...),
@@ -209,6 +210,7 @@ def reset_password_page(request: Request, token: str, db: Session = Depends(get_
     return render_template('reset_password.mako', request=request, token=token)
 
 @router.post('/reset-password')
+@limiter.limit('3/hour')
 def reset_password(
     request: Request,
     token: str = Form(...),
@@ -287,6 +289,7 @@ async def login_page_submit(
     return response
 
 @router.post('/verify-2fa')
+@limiter.limit('5/minute')
 def verify_2fa(
     request: Request,
     user_id: int = Form(...),
@@ -347,7 +350,8 @@ def logout():
 # ========== API ЭНДПОИНТЫ (JSON) ==========
 
 @router.post("/register")
-def api_register(email: str, password: str, db: Session = Depends(get_db)):
+@limiter.limit('3/minute')
+def api_register(request: Request, email: str, password: str, db: Session = Depends(get_db)):
     """Регистрация через API (JSON)"""
     existing_user = get_user_by_email(db, email)
     if existing_user:
@@ -357,7 +361,8 @@ def api_register(email: str, password: str, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def api_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit('5/minute')
+def api_login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Логин через API (JSON), возвращает JWT токен"""
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -374,6 +379,7 @@ def api_login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = De
 
 
 @router.get("/me")
-def api_get_me(current_user: User = Depends(get_current_user)):
+@limiter.limit('100/minute')
+def api_get_me(request: Request, current_user: User = Depends(get_current_user)):
     """Получить информацию о текущем пользователе (JSON)"""
     return current_user

@@ -39,6 +39,8 @@ class User(Base):
     is_email_verified = Column(Boolean, default=False)
     email_verification_token = Column(String(100), nullable=True)
 
+    # Настройки темной тема
+    dark_mode = Column(Boolean, default=False)
 
 class Task(Base):
     __tablename__ = 'tasks'
